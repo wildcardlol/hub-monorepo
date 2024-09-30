@@ -18,7 +18,7 @@
     "tiny-typed-emitter": "^2.1.0"
   },
   "scripts": {
-    "start": "tsx app.ts"
+    "start": "tsx index.ts"
   },
   "devDependencies": {
     "@types/humanize-duration": "^3.27.1",

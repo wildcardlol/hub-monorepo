@@ -5,7 +5,10 @@ import path from "path";
 import { promises as fs } from "fs";
 import { fileURLToPath } from "node:url";
 import { HubTables } from "@farcaster/hub-shuttle";
-import { Fid } from "../shuttle";
+import { CastIdJson, Fid, VerificationAddEthAddressBodyJson } from "../shuttle";
+import { MessageType, ReactionType, UserDataType } from "@farcaster/hub-nodejs";
+
+export const TIMESTAMP_48_HOURS = 172800000;
 
 const createMigrator = async (db: Kysely<HubTables>, dbSchema: string, log: Logger) => {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -49,15 +52,53 @@ export const migrateToLatest = async (
   return ok(undefined);
 };
 
-export type CastRow = {
+export type MessageData = {
+  messageType: MessageType;
+  fid: Fid;
+  timestamp: Date;
+  network: Number;
+  hash: Uint8Array;
+  hashScheme: Number;
+  signature: Uint8Array;
+  signatureScheme: Number;
+  signer: Uint8Array;
+};
+
+export type MessageRow = MessageData & {
   id: Generated<string>;
   createdAt: Generated<Date>;
   updatedAt: Generated<Date>;
   deletedAt: Date | null;
-  timestamp: Date;
-  fid: Fid;
-  hash: Uint8Array;
+};
+
+export type CastRow = MessageRow & {
   text: string;
+  embedsDeprecated: string[];
+  embeds: string[];
+  mentions: number[];
+  mentionsPositions: number[];
+  parentUrl: string | null;
+  parentCastId: CastIdJson;
+};
+
+export type ReactionsRow = MessageRow & {
+  type: ReactionType;
+  targetCastId: CastIdJson;
+  targetUrl: string;
+};
+
+export type LinkRow = MessageRow & {
+  type: string;
+  targetFid: Number;
+};
+
+export type VerificationRow = MessageRow & {
+  claim: VerificationAddEthAddressBodyJson;
+};
+
+export type UserDataRow = MessageRow & {
+  type: UserDataType;
+  value: string;
 };
 
 export type OnChainEventRow = {
@@ -73,9 +114,68 @@ export type OnChainEventRow = {
   body: Record<string, string | number>;
 };
 
+type NotificationExtraData = {
+  likedBy: Fid[];
+  followedBy: Fid[];
+  targetCastHash: string | null;
+  newCastHash: string | null;
+};
+
+export type Notifications = {
+  id: number;
+  createdAt: Generated<Date>;
+  updatedAt: Generated<Date>;
+  notificationType: EngagementType;
+  recipient: Fid;
+  actor: Fid;
+  timestamp: Date;
+  isRead: boolean;
+  timestampGroup: Date;
+  unitIdentifier: string | null;
+  extraData: NotificationExtraData;
+};
+
+export enum EngagementType {
+  LIKE = 1,
+  FOLLOW = 2,
+  RECAST = 3,
+  REPLY = 4,
+  MENTION = 5,
+  QUOTE = 6,
+  TRADE = 7,
+}
+
+export type FarcasterUser = {
+  id: number;
+  createdAt: Generated<Date>;
+  updatedAt: Generated<Date>;
+  fid: Fid;
+  username: string;
+  displayName: string;
+  custodyAddress: string | null;
+  profileBio: string;
+  pfpUrl: string;
+  followerCount: number;
+  followingCount: number;
+  activeStatus: string;
+  powerBadge: boolean;
+  cdnUrl: string;
+  triedSavingCdnUrl: boolean;
+  banned: boolean;
+  score: number | null;
+  madePointsZero: boolean;
+  lastCometchatSync: Date | null;
+};
+
 export interface Tables extends HubTables {
   casts: CastRow;
+  reactions: ReactionsRow;
   onchain_events: OnChainEventRow;
+  links: LinkRow;
+  verifications: VerificationRow;
+  user_data: UserDataRow;
+  notifications: Notifications;
+  farcaster_user: FarcasterUser;
 }
 
 export type AppDb = Kysely<Tables>;
