@@ -8,7 +8,7 @@ import { HubTables } from "@farcaster/hub-shuttle";
 import { CastIdJson, Fid, VerificationAddEthAddressBodyJson } from "../shuttle";
 import { MessageType, ReactionType, UserDataType } from "@farcaster/hub-nodejs";
 
-export const TIMESTAMP_48_HOURS = 172800000;
+export const TIMESTAMP_48_HOURS = 172800;
 
 const createMigrator = async (db: Kysely<HubTables>, dbSchema: string, log: Logger) => {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
