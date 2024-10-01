@@ -13,7 +13,7 @@ import {
   HubSubscriber,
   MessageState,
 } from "../index"; // If you want to use this as a standalone app, replace this import with "@farcaster/shuttle"
-import { AppDb, migrateToLatest, Tables } from "./db";
+import { AppDb, MessageData, migrateToLatest, Tables } from "./db";
 import {
   bytesToHexString,
   getStorageUnitExpiry,
@@ -22,32 +22,28 @@ import {
   isCastAddMessage,
   isCastRemoveMessage,
   isIdRegisterOnChainEvent,
+  isLinkAddMessage,
+  isLinkRemoveMessage,
   isMergeOnChainHubEvent,
+  isReactionAddMessage,
+  isReactionRemoveMessage,
   isSignerOnChainEvent,
   isStorageRentOnChainEvent,
+  isUserDataAddMessage,
+  isVerificationAddAddressMessage,
+  isVerificationRemoveMessage,
   Message,
 } from "@farcaster/hub-nodejs";
 import { log } from "./log";
-import { Command } from "@commander-js/extra-typings";
-import { readFileSync } from "fs";
-import {
-  BACKFILL_FIDS,
-  CONCURRENCY,
-  HUB_HOST,
-  HUB_SSL,
-  MAX_FID,
-  POSTGRES_URL,
-  POSTGRES_SCHEMA,
-  REDIS_URL,
-  SHARD_INDEX,
-  TOTAL_SHARDS,
-} from "./env";
-import * as process from "node:process";
-import url from "node:url";
-import { ok, Result } from "neverthrow";
-import { getQueue, getWorker } from "./worker";
+import { MAX_FID } from "./env";
+import { ok } from "neverthrow";
 import { Queue } from "bullmq";
 import { bytesToHex, farcasterTimeToDate } from "../utils";
+import { createCast, deleteCast } from "./utils/cast";
+import { createReaction, deleteReaction } from "./utils/reaction";
+import { createLink, deleteLink } from "./utils/link";
+import { createVerification, deleteVerification } from "./utils/verification";
+import { createUserData } from "./utils/userData";
 
 const hubId = "shuttle";
 
@@ -172,27 +168,86 @@ export class App implements MessageHandler {
     // Note that since we're relying on "state", this can sometimes be invoked twice. e.g. when a CastRemove is merged, this call will be invoked 2 twice:
     // castAdd, operation=delete, state=deleted (the cast that the remove is removing)
     // castRemove, operation=merge, state=deleted (the actual remove message)
+    const messageDesc = wasMissed ? `missed message (${operation})` : `message (${operation})`;
+    const messageData: MessageData = {
+      messageType: message.data?.type,
+      fid: message.data?.fid,
+      timestamp: (message.data && farcasterTimeToDate(message.data.timestamp)) || new Date(),
+      network: message.data?.network,
+      hash: message.hash,
+      hashScheme: message.hashScheme,
+      signature: message.signature,
+      signatureScheme: message.signatureScheme,
+      signer: message.signer,
+    };
+
     const isCastMessage = isCastAddMessage(message) || isCastRemoveMessage(message);
-    if (isCastMessage && state === "created") {
-      await appDB
-        .insertInto("casts")
-        .values({
-          fid: message.data.fid,
-          hash: message.hash,
-          text: message.data.castAddBody?.text || "",
-          timestamp: farcasterTimeToDate(message.data.timestamp) || new Date(),
-        })
-        .execute();
-    } else if (isCastMessage && state === "deleted") {
-      await appDB
-        .updateTable("casts")
-        .set({ deletedAt: farcasterTimeToDate(message.data.timestamp) || new Date() })
-        .where("hash", "=", message.hash)
-        .execute();
+    if (isCastMessage) {
+      if (state === "created") {
+        createCast(appDB, message, messageData, wasMissed, messageDesc, state, log);
+      } else if (state === "deleted") {
+        deleteCast(appDB, message, wasMissed, state, messageDesc, log);
+      }
+      log.info(
+        `proc cast: ${state} ${messageDesc} ${bytesToHexString(message.hash)._unsafeUnwrap()} (type ${
+          message.data?.type
+        })`,
+      );
     }
 
-    const messageDesc = wasMissed ? `missed message (${operation})` : `message (${operation})`;
-    log.info(`${state} ${messageDesc} ${bytesToHexString(message.hash)._unsafeUnwrap()} (type ${message.data?.type})`);
+    const isReactionMessage = isReactionAddMessage(message) || isReactionRemoveMessage(message);
+    if (isReactionMessage) {
+      if (state === "created") {
+        createReaction(appDB, message, messageData, wasMissed, messageDesc, state, log);
+      } else if (state === "deleted") {
+        deleteReaction(appDB, message, wasMissed, state, messageDesc, log);
+      }
+      log.info(
+        `proc reaction: ${state} ${messageDesc} ${bytesToHexString(message.hash)._unsafeUnwrap()} (type ${
+          message.data?.type
+        })`,
+      );
+    }
+
+    const isLinkMessage = isLinkAddMessage(message) || isLinkRemoveMessage(message);
+    if (isLinkMessage) {
+      if (state === "created") {
+        createLink(appDB, message, messageData, messageDesc, state, wasMissed, log);
+      } else if (state === "deleted") {
+        deleteLink(appDB, message, state, wasMissed, messageDesc, log);
+      }
+      log.info(
+        `proc link: ${state} ${messageDesc} ${bytesToHexString(message.hash)._unsafeUnwrap()} (type ${
+          message.data?.type
+        })`,
+      );
+    }
+
+    const isVerificationMessage = isVerificationAddAddressMessage(message) || isVerificationRemoveMessage(message);
+    if (isVerificationMessage) {
+      if (state === "created") {
+        createVerification(appDB, message, messageData, messageDesc, state, log);
+      } else if (state === "deleted") {
+        deleteVerification(appDB, message, state, messageDesc, log);
+      }
+      log.info(
+        `proc verification: ${state} ${messageDesc} ${bytesToHexString(message.hash)._unsafeUnwrap()} (type ${
+          message.data?.type
+        })`,
+      );
+    }
+
+    const isUserDataMessage = isUserDataAddMessage(message);
+    if (isUserDataMessage) {
+      if (state === "created") {
+        createUserData(appDB, message, messageData, messageDesc, state, log);
+      }
+      log.info(
+        `proc user_data: ${state} ${messageDesc} ${bytesToHexString(message.hash)._unsafeUnwrap()} (type ${
+          message.data?.type
+        })`,
+      );
+    }
   }
 
   async start() {
@@ -280,59 +335,4 @@ export class App implements MessageHandler {
     const lastEventId = await this.redis.getLastProcessedEvent(this.hubId);
     log.info(`Stopped at eventId: ${lastEventId}`);
   }
-}
-
-//If the module is being run directly, start the shuttle
-if (import.meta.url.endsWith(url.pathToFileURL(process.argv[1] || "").toString())) {
-  async function start() {
-    log.info(`Creating app connecting to: ${POSTGRES_URL}, ${REDIS_URL}, ${HUB_HOST}`);
-    const app = App.create(POSTGRES_URL, POSTGRES_SCHEMA, REDIS_URL, HUB_HOST, TOTAL_SHARDS, SHARD_INDEX, HUB_SSL);
-    log.info("Starting shuttle");
-    await app.start();
-  }
-
-  async function backfill() {
-    log.info(`Creating app connecting to: ${POSTGRES_URL}, ${REDIS_URL}, ${HUB_HOST}`);
-    const app = App.create(POSTGRES_URL, POSTGRES_SCHEMA, REDIS_URL, HUB_HOST, TOTAL_SHARDS, SHARD_INDEX, HUB_SSL);
-    const fids = BACKFILL_FIDS ? BACKFILL_FIDS.split(",").map((fid) => parseInt(fid)) : [];
-    log.info(`Backfilling fids: ${fids}`);
-    const backfillQueue = getQueue(app.redis.client);
-    await app.backfillFids(fids, backfillQueue);
-
-    // Start the worker after initiating a backfill
-    const worker = getWorker(app, app.redis.client, log, CONCURRENCY);
-    await worker.run();
-    return;
-  }
-
-  async function worker() {
-    log.info(`Starting worker connecting to: ${POSTGRES_URL}, ${REDIS_URL}, ${HUB_HOST}`);
-    const app = App.create(POSTGRES_URL, POSTGRES_SCHEMA, REDIS_URL, HUB_HOST, TOTAL_SHARDS, SHARD_INDEX, HUB_SSL);
-    const worker = getWorker(app, app.redis.client, log, CONCURRENCY);
-    await worker.run();
-  }
-
-  // for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-  //   process.on(signal, async () => {
-  //     log.info(`Received ${signal}. Shutting down...`);
-  //     (async () => {
-  //       await sleep(10_000);
-  //       log.info(`Shutdown took longer than 10s to complete. Forcibly terminating.`);
-  //       process.exit(1);
-  //     })();
-  //     await app?.stop();
-  //     process.exit(1);
-  //   });
-  // }
-
-  const program = new Command()
-    .name("shuttle")
-    .description("Synchronizes a Farcaster Hub with a Postgres database")
-    .version(JSON.parse(readFileSync("./package.json").toString()).version);
-
-  program.command("start").description("Starts the shuttle").action(start);
-  program.command("backfill").description("Queue up backfill for the worker").action(backfill);
-  program.command("worker").description("Starts the backfill worker").action(worker);
-
-  program.parse(process.argv);
 }

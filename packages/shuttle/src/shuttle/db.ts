@@ -44,7 +44,7 @@ export type VerificationProtocol = "ethereum" | "solana";
 declare const $messageDbId: unique symbol;
 type MessageDbId = string & { [$messageDbId]: true };
 
-type CastIdJson = {
+export type CastIdJson = {
   fid: Fid;
   hash: Hex;
 };

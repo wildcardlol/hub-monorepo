@@ -4,7 +4,7 @@ import { Kysely, sql } from "kysely";
 export const up = async (db: Kysely<any>) => {
   // Casts -------------------------------------------------------------------------------------
   await db.schema
-    .createTable("casts")
+    .createTable("verifications")
     .addColumn("id", "uuid", (col) => col.defaultTo(sql`generate_ulid()`))
     .addColumn("createdAt", "timestamptz", (col) => col.notNull().defaultTo(sql`current_timestamp`))
     .addColumn("updatedAt", "timestamptz", (col) => col.notNull().defaultTo(sql`current_timestamp`))
@@ -19,20 +19,14 @@ export const up = async (db: Kysely<any>) => {
     .addColumn("signature", "bytea", (col) => col.notNull())
     .addColumn("signatureScheme", sql`smallint`, (col) => col.notNull())
     .addColumn("signer", "bytea", (col) => col.notNull())
-    // cast data
-    .addColumn("text", "text", (col) => col.notNull())
-    .addColumn("embedsDeprecated", sql`text[]`)
-    .addColumn("embeds", sql`text[]`, (col) => col.notNull())
-    .addColumn("mentions", sql`bigint[]`, (col) => col.notNull())
-    .addColumn("mentionsPositions", sql`smallint[]`, (col) => col.notNull())
-    .addColumn("parentUrl", "text", (col) => col.notNull())
-    .addColumn("parentCastId", "json")
+    // verification data
+    .addColumn("claim", "jsonb", (col) => col.notNull())
     .execute();
 
   await db.schema
-    .createIndex("casts_fid_timestamp_index")
-    .on("casts")
+    .createIndex("verifications_fid_timestamp_index")
+    .on("verifications")
     .columns(["fid", "timestamp"])
-    .where(sql.ref("deleted_at"), "is", null) // Only index active (non-deleted) casts
+    .where(sql.ref("deleted_at"), "is", null) // Only index active (non-deleted) verifications
     .execute();
 };
