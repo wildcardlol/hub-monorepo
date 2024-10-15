@@ -1,5 +1,17 @@
 # @farcaster/core
 
+## 0.15.5
+
+### Patch Changes
+
+- aa9cde75: feat: add user location to the protocol
+
+## 0.15.4
+
+### Patch Changes
+
+- a8736e1d: re-introducing faker dependency
+
 ## 0.15.3
 
 ### Patch Changes

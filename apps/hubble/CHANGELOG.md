@@ -1,5 +1,34 @@
 # @farcaster/hubble
 
+## 1.15.7
+
+### Patch Changes
+
+- aa9cde75: feat: add user location to the protocol
+- d22394f5: chore: add metrics for http/rpc/streaming requests for grafana
+- Updated dependencies [aa9cde75]
+  - @farcaster/hub-nodejs@0.12.5
+
+## 1.15.6
+
+### Patch Changes
+
+- c2c409fb: chore: add metrics for grpc server
+- 1ca66d8c: fix: Limit message bundle size
+
+## 1.15.5
+
+### Patch Changes
+
+- dbf1f155: fix: Split sync health job into 10 min chunks to limit memory usage
+- fff8d7bf: Ignore local/loopback IP traffic in connection limiter
+- 44126c2f: feat: Add `--announce-rpc-port` flag
+- 8923cb71: Ignore rate limits for local loopback traffic
+- 8ce6169a: fix: serialize contact info into a string before logging in sync health job
+- 2717d44d: chore: add contact info to sync health logs
+- cda909b0: fix: add request length limit for getAllMessagesBySyncIds
+  - @farcaster/hub-nodejs@0.12.4
+
 ## 1.15.4
 
 ### Patch Changes
