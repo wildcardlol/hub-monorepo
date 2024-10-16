@@ -28,7 +28,7 @@ If you want to run the test the app, do the following:
 ```bash
 
 # Ensure you have node 21 installed, use nvm to install it
-nvm install 21
+nvm install 22
 
 # If necessary, build packages/core dependency
 ( cd packages/core && yarn install && yarn build; )

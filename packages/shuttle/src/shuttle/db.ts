@@ -151,6 +151,9 @@ export const getDbClient = (connectionString?: string, schema = "public") => {
       pool: new Pool({
         max: 10,
         connectionString,
+        ssl: {
+          rejectUnauthorized: false,  // Set to true if you want to validate certificates
+        },
       }),
       cursor: Cursor,
     }),
